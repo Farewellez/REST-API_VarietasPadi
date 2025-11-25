@@ -11,20 +11,20 @@ import (
 )
 
 func main() {
-	cfg := config.Load()                // buat load configurasi dari env config di internal
-	db := database.Connect(cfg.DBURL)   // mirip config bedanya cuma di direktori database. bagian ini buat connect ke db, return object maupun handle connection
-	defer db.Close()                    // clean-up kalau udah selesai
-	router := httpHandler.NewRouter(db) // ini buat ngambil beberapa object dari directori http. Ini juga buat ngambil semua route yang dibuat
+	cfg := config.Load()
+	db := database.Connect(cfg.DBURL)
+	defer db.Close()
 
-	// srv bakal pointer ke alamat http.server
+	router := httpHandler.NewRouter(db)
+
 	srv := &http.Server{
-		Addr:         ":" + cfg.Port, // sekarang ambil dari config
+		Addr:         ":" + cfg.Port,
 		Handler:      router,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 
-	log.Printf("Server running on port: %s", srv.Addr) // cuma buat debug log ajah
-	log.Fatal(srv.ListenAndServe())                    // ListenAndServe memiliki side effect (I/O) dan blocking
+	log.Printf("Server running on port: %s", srv.Addr)
+	log.Fatal(srv.ListenAndServe())
 }

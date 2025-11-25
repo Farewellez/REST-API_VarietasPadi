@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daftar Varietas Padi</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f6f6f6;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            margin-top: 20px;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        th {
+            background: #2196F3;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        tr:hover {
+            background: #f1f1f1;
+        }
+        .loading {
+            text-align: center;
+            font-size: 18px;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Daftar Varietas Padi</h1>
+
+    <div id="status" class="loading">Memuat data...</div>
+
+    <table id="dataTable" style="display:none;">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Varietas Kelas</th>
+                <th>Warna</th>
+                <th>Panjang Biji (mm)</th>
+                <th>Tekstur Permukaan</th>
+                <th>Bentuk Ujung Daun</th>
+                <th>Tanggal Input</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        fetch("/api/varietas")
+            .then(res => res.json())
+            .then(json => {
+                const status = document.getElementById("status");
+                const table = document.getElementById("dataTable");
+                const tbody = table.querySelector("tbody");
+
+                status.style.display = "none";
+                table.style.display = "table";
+
+                json.data.forEach(row => {
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td>${row.id_padi}</td>
+                        <td>${row.varietas_kelas}</td>
+                        <td>${row.warna}</td>
+                        <td>${row.panjang_biji_mm}</td>
+                        <td>${row.tekstur_permukaan}</td>
+                        <td>${row.bentuk_ujung_daun}</td>
+                        <td>${new Date(row.waktu_pembuatan).toLocaleString()}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            })
+            .catch(err => {
+                document.getElementById("status").innerHTML = "Gagal memuat data";
+            });
+    </script>
+
+</body>
+</html>
