@@ -27,13 +27,13 @@ func NewRouter(db *sql.DB) http.Handler {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{
-  "message": "REST API Varietas & Pengamatan Padi",
-  "status": "active",
-  "endpoints": {
-    "GET": "/api/varietas → ambil semua data pengamatan padi"
-  },
-  "docs": "https://github.com/Farewellez/REST-API_VarietasPadi"
-}`))
+		  "message": "REST API Varietas & Pengamatan Padi",
+		  "status": "active",
+		  "endpoints": {
+		    "GET": "/api/varietas → ambil semua data pengamatan padi"
+		  },
+		  "docs": "https://github.com/Farewellez/REST-API_VarietasPadi"
+		}`))
 	})
 
 	return mux
