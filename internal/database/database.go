@@ -1,31 +1,32 @@
-// internal/database/postgres.go
 package database
 
 import (
 	"database/sql"
-	"log"
+	"errors"
 	"time"
 
-	_ "github.com/jackc/pgx/v5/stdlib" // v5 — terbaru, cepet, aktif maintained
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-func Connect(dsn string) *sql.DB {
-	// "pgx" adalah nama driver untuk database/sql
+// NewDB membuat dan menguji koneksi ke PostgreSQL
+func NewDB(dsn string) (*sql.DB, error) {
+	// 1. sql.Open
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		log.Fatal("Failed to open PostgreSQL connection:", err)
+		return nil, errors.New("gagal membuka koneksi PostgreSQL: " + err.Error())
 	}
 
-	// Ping biar langsung ketahuan kalau DSN salah
+	// 2. Ping (Uji Koneksi Awal)
 	if err = db.Ping(); err != nil {
-		log.Fatal("Failed to ping PostgreSQL:", err)
+		// Tutup koneksi yang setengah terbuka jika ping gagal
+		db.Close()
+		return nil, errors.New("gagal melakukan ping ke PostgreSQL: " + err.Error())
 	}
 
-	// Tuning connection pool
+	// 3. Tuning Connection Pool
 	db.SetMaxOpenConns(20)
-	db.SetMaxIdleConns(20)
+	db.SetMaxIdleConns(5) // Biasanya MaxIdle dibuat lebih kecil dari MaxOpen
 	db.SetConnMaxLifetime(5 * time.Minute)
 
-	log.Println("Successfully connected to Neon PostgreSQL!")
-	return db
+	return db, nil
 }

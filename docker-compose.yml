@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  # HANYA SATU DEFINISI SERVICE API
+  api:
+    build:
+      context: . 
+      dockerfile: Dockerfile
+    container_name: varietas_api_neon # Nama container spesifik
+    restart: always
+    
+    # Port untuk mengakses API dari host Anda (misalnya: http://localhost:8080)
+    ports:
+      - "8080:8080"
+      
+    # Environment Variables yang akan dibaca oleh internal/config/config.go
+    environment:
+      # PORT default Go API
+      PORT: 8080
+      
+      # DB_URL LENGKAP UNTUK NEONDB EKSTERNAL
+      # Nilai ${...} akan diisi otomatis dari file .env
+      DB_URL: postgres://${NEON_USER}:${NEON_PASSWORD}@${NEON_HOST}:5432/${NEON_DB_NAME}?sslmode=${NEON_SSL_MODE}
+      
+# CATATAN: Karena kita menggunakan NeonDB eksternal, kita tidak perlu
+# mendefinisikan services 'db', 'volumes', atau 'networks'.

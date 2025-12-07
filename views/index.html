@@ -3,50 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Daftar Varietas Padi</title>
+    <title>Daftar Varietas Padi | CRUD</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f6f6f6;
-            padding: 20px;
-        }
-        h1 {
-            text-align: center;
-            color: #333;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background: white;
-            margin-top: 20px;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-        }
-        th {
-            background: #2196F3;
-            color: white;
-            padding: 12px;
-            text-align: left;
-        }
-        td {
-            padding: 10px;
-            border-bottom: 1px solid #ddd;
-        }
-        tr:hover {
-            background: #f1f1f1;
-        }
-        .loading {
-            text-align: center;
-            font-size: 18px;
-            padding: 20px;
-        }
+        /* ... CSS kamu yang sudah ada ... */
+        body { font-family: Arial, sans-serif; background: #f6f6f6; padding: 20px; }
+        h1 { text-align: center; color: #333; }
+        table { width: 100%; border-collapse: collapse; background: white; margin-top: 20px; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+        th { background: #2196F3; color: white; padding: 12px; text-align: left; }
+        td { padding: 10px; border-bottom: 1px solid #ddd; }
+        tr:hover { background: #f1f1f1; }
+        .loading { text-align: center; font-size: 18px; padding: 20px; }
+        
+        /* Gaya tambahan untuk Form dan Tombol */
+        #createForm { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        #createForm input, #createForm button { padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        #createForm button { background: #4CAF50; color: white; cursor: pointer; border: none; grid-column: span 3; }
+        .delete-btn { background: #f44336; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; }
     </style>
 </head>
 <body>
 
     <h1>Daftar Varietas Padi</h1>
+    <p style="text-align: center; color: #555;">(Data diambil dari NeonDB via Go API di Docker)</p>
 
+    <form id="createForm">
+        <h3>Tambah Data Baru (CREATE)</h3>
+        <input type="text" id="input_varietas_kelas" placeholder="Varietas Kelas" required>
+        <input type="text" id="input_warna" placeholder="Warna" required>
+        <input type="number" id="input_panjang_biji_mm" placeholder="Panjang Biji (mm)" step="0.01" required>
+        <input type="text" id="input_tekstur_permukaan" placeholder="Tekstur Permukaan" required>
+        <input type="text" id="input_bentuk_ujung_daun" placeholder="Bentuk Ujung Daun" required>
+        <button type="submit">TAMBAH DATA BARU (POST)</button>
+    </form>
     <div id="status" class="loading">Memuat data...</div>
 
     <table id="dataTable" style="display:none;">
@@ -59,39 +47,120 @@
                 <th>Tekstur Permukaan</th>
                 <th>Bentuk Ujung Daun</th>
                 <th>Tanggal Input</th>
-            </tr>
+                <th>Aksi</th> </tr>
         </thead>
         <tbody></tbody>
     </table>
 
     <script>
-        fetch("/api/varietas")
-            .then(res => res.json())
-            .then(json => {
-                const status = document.getElementById("status");
-                const table = document.getElementById("dataTable");
-                const tbody = table.querySelector("tbody");
+        const API_URL = "/api/varietas";
+        
+        // --- 1. Fungsi Utama: LOAD / READ ALL (GET) ---
+        function loadData() {
+            const status = document.getElementById("status");
+            const table = document.getElementById("dataTable");
+            const tbody = table.querySelector("tbody");
+            tbody.innerHTML = ''; // Bersihkan tabel sebelum memuat ulang
+            status.innerHTML = 'Memuat data...';
+            status.style.display = "block";
+            table.style.display = "none";
 
-                status.style.display = "none";
-                table.style.display = "table";
+            fetch(API_URL)
+                .then(res => res.json())
+                .then(json => {
+                    status.style.display = "none";
+                    table.style.display = "table";
 
-                json.data.forEach(row => {
-                    const tr = document.createElement("tr");
-                    tr.innerHTML = `
-                        <td>${row.id_padi}</td>
-                        <td>${row.varietas_kelas}</td>
-                        <td>${row.warna}</td>
-                        <td>${row.panjang_biji_mm}</td>
-                        <td>${row.tekstur_permukaan}</td>
-                        <td>${row.bentuk_ujung_daun}</td>
-                        <td>${new Date(row.waktu_pembuatan).toLocaleString()}</td>
-                    `;
-                    tbody.appendChild(tr);
+                    if (!json.data || json.data.length === 0) {
+                        status.innerHTML = 'Tidak ada data ditemukan.';
+                        status.style.display = "block";
+                        return;
+                    }
+
+                    json.data.forEach(row => {
+                        const tr = document.createElement("tr");
+                        tr.innerHTML = `
+                            <td>${row.id_padi}</td>
+                            <td>${row.varietas_kelas}</td>
+                            <td>${row.warna}</td>
+                            <td>${row.panjang_biji_mm}</td>
+                            <td>${row.tekstur_permukaan}</td>
+                            <td>${row.bentuk_ujung_daun}</td>
+                            <td>${new Date(row.waktu_pembuatan).toLocaleString()}</td>
+                            <td>
+                                <button class="delete-btn" onclick="deleteData(${row.id_padi})">Hapus (DELETE)</button>
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                })
+                .catch(err => {
+                    console.error('Error fetching data:', err);
+                    document.getElementById("status").innerHTML = "Gagal memuat data dari API.";
                 });
+        }
+        
+        // --- 2. Fungsi CREATE (POST) ---
+        document.getElementById('createForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const newData = {
+                varietas_kelas: document.getElementById('input_varietas_kelas').value,
+                warna: document.getElementById('input_warna').value,
+                panjang_biji_mm: parseFloat(document.getElementById('input_panjang_biji_mm').value),
+                tekstur_permukaan: document.getElementById('input_tekstur_permukaan').value,
+                bentuk_ujung_daun: document.getElementById('input_bentuk_ujung_daun').value,
+            };
+
+            fetch(API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(newData)
             })
-            .catch(err => {
-                document.getElementById("status").innerHTML = "Gagal memuat data";
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                alert(`Data baru berhasil ditambahkan! ID: ${data.id_padi}`);
+                document.getElementById('createForm').reset(); // Bersihkan form
+                loadData(); // Muat ulang tabel
+            })
+            .catch(error => {
+                alert('Gagal menambahkan data. Cek console untuk detail error.');
+                console.error('Error POST:', error);
             });
+        });
+
+        // --- 3. Fungsi DELETE (DELETE) ---
+        function deleteData(id) {
+            if (!confirm(`Yakin ingin menghapus data dengan ID: ${id}?`)) {
+                return;
+            }
+
+            fetch(`${API_URL}/${id}`, {
+                method: 'DELETE'
+            })
+            .then(response => {
+                if (response.status === 204) { // 204 No Content adalah sukses untuk DELETE
+                    alert(`Data ID ${id} berhasil dihapus.`);
+                    loadData(); // Muat ulang tabel
+                } else if (response.status === 404) {
+                    alert(`Gagal: Data ID ${id} tidak ditemukan.`);
+                } else {
+                    alert('Gagal menghapus data. Cek console.');
+                    console.error('Error DELETE:', response.status);
+                }
+            })
+            .catch(error => console.error('Error DELETE:', error));
+        }
+        
+        // Panggil saat halaman pertama kali dimuat
+        loadData(); 
     </script>
 
 </body>
