@@ -35,57 +35,53 @@ type VarietasService interface {
 
 VarietasRepository interface di sini berfungsi untuk menentukan apa yang harus dilakukan oleh database tanpa peduli bagaimana cara melakukannya. bagian ini juga yang akan menyediakan fitur CRUD data ke sumber eksternal. interface kedua yaitu VarietasService
 
-# 2. varietas_repository.go
+# 2\. config.go
 
-File ini berisi **implementasi** konkret dari kontrak `domain.VarietasRepository`. Lapisan ini bertanggung jawab penuh untuk berinteraksi dengan dunia luar (database) dan mengelola semua **Side Effects** I/O. 
-
-### Struktur Repository
+File **`internal/config/config.go`** menangani **Side Effect** pertama di fase inisiasi: **membaca *environment variables*** (seperti `DB_URL` dari file `.env`). Tugasnya adalah mengisolasi detail pembacaan konfigurasi dari lapisan aplikasi lainnya.
 
 ```
-// internal/repository/varietas_repository.go
-package repository
+// internal/config/config.go
+package config
 
 import (
-	"context"
-	"database/sql"
-	"github.com/Farewellez/REST-API_VarietasPadi/internal/domain"
+	"log"
+	"os"
+
+	"github.com/joho/godotenv"
 )
 
-type VarietasRepositoryImpl struct {
-	DB *sql.DB // Koneksi database sebagai dependensi
+// Config merepresentasikan konfigurasi aplikasi
+type Config struct {
+	DBURL string
+	Port  string
 }
 
-func NewVarietasRepository(db *sql.DB) domain.VarietasRepository {
-	return &VarietasRepositoryImpl{DB: db}
-}
-```
+// LoadConfig memuat konfigurasi dari environment variables atau file .env
+func LoadConfig() *Config {
+	// Side Effect: Membaca file .env jika ada
+	if err := godotenv.Load(); err != nil {
+		log.Println("Tidak ada file .env yang ditemukan. Menggunakan environment variable sistem.")
+	}
 
-Struct `VarietasRepositoryImpl` menerima dependensi `*sql.DB`. Ini memastikan bahwa *repository* ini hanyalah **adapter** untuk database, memenuhi kontrak `domain.VarietasRepository`.
-
-### Implementasi: FindByID (Security Focus)
-Metode ini menunjukkan praktik terbaik dalam *data access*, terutama dalam hal **keamanan** dan **konkurensi** (aspek penting FP/Go).
-
-```
-func (r *VarietasRepositoryImpl) FindByID(ctx context.Context, id int) (domain.VarietasPadi, error) {
-	var data domain.VarietasPadi
+	// Membaca variabel environment
+	dbURL := os.Getenv("DB_URL")
+	if dbURL == "" {
+		log.Fatalf("DB_URL environment variable tidak diatur.")
+	}
 	
-	// Prepared Statement: Mencegah SQL Injection
-	query := "SELECT id_padi, varietas_kelas, warna, ... FROM data_pengamatan_padi WHERE id_padi = $1"
-	
-	// Eksekusi I/O dengan Context
-	err := r.DB.QueryRowContext(ctx, query, id).Scan(
-		&data.IDPadi, 
-		&data.VarietasKelas, 
-        // ... scanning field lain
-	)
-    // ... Error handling
-	return data, nil
+	port := os.Getenv("API_PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	return &Config{
+		DBURL: dbURL,
+		Port:  port,
+	}
 }
 ```
 
-1.  **`context.Context`**: Digunakan untuk mengelola batas waktu dan pembatalan permintaan. Ini adalah mekanisme kunci Golang untuk mengelola *state* non-lokal di operasi I/O yang rentan terhadap latensi (sejalan dengan prinsip FP).
-2.  **Prepared Statement (`id_padi = $1`)**: Dengan memisahkan *query* dan parameter (`id`), kita secara aktif mencegah serangan **SQL Injection**, sebuah praktik wajib dalam **Cybersecurity**.
-3.  **Side-Effect Execution**: Baris `r.DB.QueryRowContext(...)` adalah satu-satunya tempat di aplikasi yang secara langsung memicu *side effect* (interaksi database) yang diisolasi dari lapisan di atasnya.
+Fungsi `LoadConfig` di sini berfungsi untuk **mengisolasi** proses pembacaan variabel lingkungan dari *main function*. Ini adalah **Side Effect** yang dilakukan di awal *startup* aplikasi. *Struct* `Config` yang dikembalikan kemudian disuntikkan (**DI**) ke fungsi `NewPostgresDB` di lapisan **Database** (seperti yang terlihat di `main.go`), memastikan seluruh aplikasi menerima konfigurasi yang sudah diolah.
 
 # 3. varietas_service.go
 
@@ -198,7 +194,97 @@ func (h *VarietasHandler) CreateVarietas(w http.ResponseWriter, r *http.Request)
 * **Fokus Adapter**: Handler tidak melakukan validasi data bisnis (misalnya, apakah `PanjangBijiMM` > 0); tugas itu didelegasikan sepenuhnya ke Service Layer.
 * **Status Code**: Handler bertanggung jawab menerjemahkan hasil (sukses/gagal) dari Service menjadi Status Code HTTP standar (misalnya, `201 Created` atau `422 Unprocessable Entity`), memastikan API berkomunikasi dengan benar ke klien.
 
-# 5. cmd/server/main.go
+
+# 5. varietas_repository.go
+
+File ini berisi **implementasi** konkret dari kontrak `domain.VarietasRepository`. Lapisan ini bertanggung jawab penuh untuk berinteraksi dengan dunia luar (database) dan mengelola semua **Side Effects** I/O. 
+
+### Struktur Repository
+
+```
+// internal/repository/varietas_repository.go
+package repository
+
+import (
+	"context"
+	"database/sql"
+	"github.com/Farewellez/REST-API_VarietasPadi/internal/domain"
+)
+
+type VarietasRepositoryImpl struct {
+	DB *sql.DB // Koneksi database sebagai dependensi
+}
+
+func NewVarietasRepository(db *sql.DB) domain.VarietasRepository {
+	return &VarietasRepositoryImpl{DB: db}
+}
+```
+
+Struct `VarietasRepositoryImpl` menerima dependensi `*sql.DB`. Ini memastikan bahwa *repository* ini hanyalah **adapter** untuk database, memenuhi kontrak `domain.VarietasRepository`.
+
+### Implementasi: FindByID (Security Focus)
+Metode ini menunjukkan praktik terbaik dalam *data access*, terutama dalam hal **keamanan** dan **konkurensi** (aspek penting FP/Go).
+
+```
+func (r *VarietasRepositoryImpl) FindByID(ctx context.Context, id int) (domain.VarietasPadi, error) {
+	var data domain.VarietasPadi
+	
+	// Prepared Statement: Mencegah SQL Injection
+	query := "SELECT id_padi, varietas_kelas, warna, ... FROM data_pengamatan_padi WHERE id_padi = $1"
+	
+	// Eksekusi I/O dengan Context
+	err := r.DB.QueryRowContext(ctx, query, id).Scan(
+		&data.IDPadi, 
+		&data.VarietasKelas, 
+        // ... scanning field lain
+	)
+    // ... Error handling
+	return data, nil
+}
+```
+
+1.  **`context.Context`**: Digunakan untuk mengelola batas waktu dan pembatalan permintaan. Ini adalah mekanisme kunci Golang untuk mengelola *state* non-lokal di operasi I/O yang rentan terhadap latensi (sejalan dengan prinsip FP).
+2.  **Prepared Statement (`id_padi = $1`)**: Dengan memisahkan *query* dan parameter (`id`), kita secara aktif mencegah serangan **SQL Injection**, sebuah praktik wajib dalam **Cybersecurity**.
+3.  **Side-Effect Execution**: Baris `r.DB.QueryRowContext(...)` adalah satu-satunya tempat di aplikasi yang secara langsung memicu *side effect* (interaksi database) yang diisolasi dari lapisan di atasnya.
+
+# 6\. database.go
+
+File **`internal/database/database.go`** adalah *factory function* yang bertanggung jawab atas **Side Effect** kritis: **inisiasi koneksi database** PostgreSQL. Tugasnya adalah mengisolasi detail koneksi dari lapisan Repository.
+
+```
+// internal/database/database.go
+package database
+
+import (
+	"database/sql"
+	"log"
+	_ "github.com/lib/pq" // Driver PostgreSQL
+)
+
+// NewPostgresDB membuat koneksi baru ke database
+func NewPostgresDB(databaseURL string) *sql.DB {
+	db, err := sql.Open("postgres", databaseURL)
+	if err != nil {
+		log.Fatalf("Gagal membuka koneksi database: %v", err)
+	}
+
+	// Ping untuk memastikan koneksi aktif
+	if err = db.Ping(); err != nil {
+		log.Fatalf("Gagal melakukan ping ke database: %v", err)
+	}
+
+	log.Println("Koneksi database PostgreSQL (NeonDB) berhasil!")
+	return db
+}
+```
+
+Fungsi `NewPostgresDB` di sini berfungsi sebagai **satu-satunya tempat** di mana koneksi I/O database dibuka, menjadikannya **Inisiasi Side Effect** yang penting. Objek `*sql.DB` yang dikembalikan kemudian disuntikkan (**Dependency Injection**) ke `VarietasRepositoryImpl`. Penggunaan **`db.Ping()`** dan `log.Fatalf` memastikan prinsip **DevOps** *fail fast* diterapkan; jika database tidak tersedia, aplikasi akan segera berhenti.
+
+Tentu\! Saya akan memastikan format dan struktur penjelasannya sama persis seperti contoh yang kamu berikan, termasuk gaya *code block* dan penjelasannya.
+
+Langkah logis berikutnya adalah mendokumentasikan file konfigurasi yang bertanggung jawab membaca *environment variables*, yaitu **`internal/config/config.go`**.
+
+# 7. cmd/server/main.go
 
 File `main.go` adalah **titik komposit** aplikasi. Tugasnya bukanlah menjalankan logika bisnis (itu tugas Service), melainkan **merangkai (wiring)** semua dependensi (Repository, Service, Handler) dan memulai server.
 
@@ -237,7 +323,7 @@ func main() {
 Terima kasih sudah memberitahu\! Maafkan kalau ada *glitch* di respon sebelumnya. Mari kita fokus kembali dan buatkan penjelasan yang jelas dan terstruktur untuk file **Setup & Deployment (DevOps)**, mengikuti format yang kamu minta.
 
 
-# 6\. Setup & Deployment (DevOps)
+# 8\. Setup & Deployment (DevOps)
 
 File **`Dockerfile`** dan **`docker-compose.yml`** adalah implementasi dari prinsip **Infrastruktur sebagai Kode (IaC)**. Tugasnya adalah mendefinisikan dan mengotomatisasi *packaging* serta menjalankan aplikasi. Aspek ini selaras dengan prinsip **Deklaratif** (mirip FP), di mana kita mendefinisikan *state* akhir yang diinginkan, bukan langkah-langkah prosedural instalasi.
 
@@ -303,90 +389,6 @@ services:
 3.  **Port Mapping**: Memastikan *side effect* HTTP yang dimulai oleh `main.go` di *port* 8080 dapat diakses dari *host* lokal.
 
 
-# 7\. database.go
 
-File **`internal/database/database.go`** adalah *factory function* yang bertanggung jawab atas **Side Effect** kritis: **inisiasi koneksi database** PostgreSQL. Tugasnya adalah mengisolasi detail koneksi dari lapisan Repository.
-
-```
-// internal/database/database.go
-package database
-
-import (
-	"database/sql"
-	"log"
-	_ "github.com/lib/pq" // Driver PostgreSQL
-)
-
-// NewPostgresDB membuat koneksi baru ke database
-func NewPostgresDB(databaseURL string) *sql.DB {
-	db, err := sql.Open("postgres", databaseURL)
-	if err != nil {
-		log.Fatalf("Gagal membuka koneksi database: %v", err)
-	}
-
-	// Ping untuk memastikan koneksi aktif
-	if err = db.Ping(); err != nil {
-		log.Fatalf("Gagal melakukan ping ke database: %v", err)
-	}
-
-	log.Println("Koneksi database PostgreSQL (NeonDB) berhasil!")
-	return db
-}
-```
-
-Fungsi `NewPostgresDB` di sini berfungsi sebagai **satu-satunya tempat** di mana koneksi I/O database dibuka, menjadikannya **Inisiasi Side Effect** yang penting. Objek `*sql.DB` yang dikembalikan kemudian disuntikkan (**Dependency Injection**) ke `VarietasRepositoryImpl`. Penggunaan **`db.Ping()`** dan `log.Fatalf` memastikan prinsip **DevOps** *fail fast* diterapkan; jika database tidak tersedia, aplikasi akan segera berhenti.
-
-Tentu\! Saya akan memastikan format dan struktur penjelasannya sama persis seperti contoh yang kamu berikan, termasuk gaya *code block* dan penjelasannya.
-
-Langkah logis berikutnya adalah mendokumentasikan file konfigurasi yang bertanggung jawab membaca *environment variables*, yaitu **`internal/config/config.go`**.
-
-
-# 8\. config.go
-
-File **`internal/config/config.go`** menangani **Side Effect** pertama di fase inisiasi: **membaca *environment variables*** (seperti `DB_URL` dari file `.env`). Tugasnya adalah mengisolasi detail pembacaan konfigurasi dari lapisan aplikasi lainnya.
-
-```
-// internal/config/config.go
-package config
-
-import (
-	"log"
-	"os"
-
-	"github.com/joho/godotenv"
-)
-
-// Config merepresentasikan konfigurasi aplikasi
-type Config struct {
-	DBURL string
-	Port  string
-}
-
-// LoadConfig memuat konfigurasi dari environment variables atau file .env
-func LoadConfig() *Config {
-	// Side Effect: Membaca file .env jika ada
-	if err := godotenv.Load(); err != nil {
-		log.Println("Tidak ada file .env yang ditemukan. Menggunakan environment variable sistem.")
-	}
-
-	// Membaca variabel environment
-	dbURL := os.Getenv("DB_URL")
-	if dbURL == "" {
-		log.Fatalf("DB_URL environment variable tidak diatur.")
-	}
-	
-	port := os.Getenv("API_PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	return &Config{
-		DBURL: dbURL,
-		Port:  port,
-	}
-}
-```
-
-Fungsi `LoadConfig` di sini berfungsi untuk **mengisolasi** proses pembacaan variabel lingkungan dari *main function*. Ini adalah **Side Effect** yang dilakukan di awal *startup* aplikasi. *Struct* `Config` yang dikembalikan kemudian disuntikkan (**DI**) ke fungsi `NewPostgresDB` di lapisan **Database** (seperti yang terlihat di `main.go`), memastikan seluruh aplikasi menerima konfigurasi yang sudah diolah.
 
 
